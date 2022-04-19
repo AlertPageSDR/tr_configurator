@@ -44,7 +44,7 @@ class RR:
         my_auth_info = auth_type(
             username=self.rr_user,
             password=self.rr_pass,
-            appKey="c820a9fd-7488-11ec-ba68-0ecc8ab9ccec",
+            appKey="4abd9b6f-bea7-11ec-ba68-0ecc8ab9ccec",
             version="15",
             style="rpc",
         )
