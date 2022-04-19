@@ -337,11 +337,11 @@ def main():
     results = System.fetch_site_data(SITES, use_rr_id=USE_RR_SITE_ID, add_metadata=DOWNLOAD_TALKGROUPS)
 
     if DOWNLOAD_TALKGROUPS:
-        hex_dec = hex(int(talkgroup["tgDec"])).strip("0x")
         talkgroups = results["talkgroups"]
         with open(f"{SYSTEM}.talkgroups.csv", 'w') as f:
             f.write("Decimal,Hex,Alpha Tag,Mode,Description,Tag,Category\n")
             for talkgroup in talkgroups:
+                hex_dec = hex(int(talkgroup["tgDec"])).strip("0x")
                 f.write(f'{talkgroup["tgDec"]},{hex_dec},{talkgroup["tgAlpha"]},{talkgroup["tgMode"].upper().replace("DE","E")},{talkgroup["tgDescr"]},{talkgroup["tag"]},{talkgroup["cat"]}\n')
 
 
