@@ -1,9 +1,11 @@
 import argparse
+from binascii import crc32
 import datetime
 import json
 import math
 import decimal
 from copy import deepcopy
+import uuid
 from zeep import Client, helpers
 
 system_types = {
@@ -30,8 +32,9 @@ class RR:
         self.rr_system_id = rr_system_id
         self.rr_user = username
         self.rr_pass = password
+    
 
-    def fetch_site_data(self, site_numbers):
+    def fetch_site_data(self, site_numbers, use_rr_id=True, add_metadata=False):
         """
         Radio Refrence interface library
         """
@@ -58,14 +61,49 @@ class RR:
         sites_type = client.get_type("ns0:TrsSites")
         sites = sites_type(client.service.getTrsSites(self.rr_system_id, my_auth_info))
 
+        if add_metadata:
+            talkgroups_type = client.get_type("ns0:Talkgroups")
+            talkgroups_result = talkgroups_type(
+                client.service.getTrsTalkgroups(self.rr_system_id, 0, 0, 0, my_auth_info)
+            )
+            talkgroups_result = helpers.serialize_object(talkgroups_result, dict)
+
+            talkgroup_cat = client.get_type("ns0:TalkgroupCats")
+            talkgroup_categories = talkgroup_cat(client.service.getTrsTalkgroupCats(self.rr_system_id, my_auth_info))
+            talkgroup_categories = json.loads(json.dumps(helpers.serialize_object(talkgroup_categories, dict), cls=DecimalEncoder))
+
+        if add_metadata:
+            print("[+] Fetching Radio Reference data, this will take a hot sec... You can thank RR's sTuPiD API")
+            talkgroups = []
+            for talkgroup in json.loads(json.dumps(talkgroups_result, cls=DecimalEncoder)):
+                for cat in talkgroup_categories:
+                    if cat["tgCid"] == talkgroup["tgCid"]:
+                        talkgroup["cat"] = cat["tgCname"]
+                        talkgroup["tag"] = ""
+                        if len(talkgroup["tags"]) > 0:
+                            tag_id = talkgroup["tags"][0]['tagId']
+                            tag = client.service.getTag(tag_id, my_auth_info)
+                            talkgroup["tag"] = tag[0]["tagDescr"]
+                        talkgroups.append(talkgroup)
+
         results = {}
         results["sites"] = []
+        if add_metadata:
+            results["talkgroups"] = talkgroups
         results["system"] = json.loads(json.dumps(system_json, cls=DecimalEncoder))
+
         for site in sites:
             for site_number in site_numbers:
-                if int(site["siteNumber"]) == int(site_number):
-                    _json = helpers.serialize_object(site, dict)
-                    results["sites"].append({ "site": site_number, "data": json.loads(json.dumps(_json, cls=DecimalEncoder))})
+                if use_rr_id:
+                    if int(site_number) == int(site["siteId"]):
+                        _json = helpers.serialize_object(site, dict)
+                        results["sites"].append({ "site": site["siteNumber"], "rr_site_id": site["siteId"],  "data": json.loads(json.dumps(_json, cls=DecimalEncoder))})
+                else:
+                    if int(site["siteNumber"]) == int(site_number):
+                        _json = helpers.serialize_object(site, dict)
+                        results["sites"].append({ "site": site["siteNumber"], "rr_site_id":  site["siteId"], "data": json.loads(json.dumps(_json, cls=DecimalEncoder))})
+        if len(results["sites"]) == 0:
+            raise ValueError("NO SITES RETURNED")
         return results
                 
 class tr_autotune:
@@ -224,7 +262,6 @@ class trunk_recorder_helper:
         "ppm": 0,
         "gain": 49,
         "agc": True,
-        "digitalLevels": 1,
         "digitalRecorders": 4,
         "analogRecorders": 0,
         "driver": "osmosdr",
@@ -257,16 +294,22 @@ class trunk_recorder_helper:
 
 def main():
     parser = argparse.ArgumentParser(description='Generate TR config with RR data')
+    parser.add_argument('-r','--use_rr_site_id', help='Use RR site ID', action='store_true')
     parser.add_argument('-s','--sites', nargs='+', help='Sites to generate configs for. space seperated', required=True)
     parser.add_argument('--system', help='System to generate configs for', required=True)
+    parser.add_argument('-o','--output_dir', help='The directory to place the configs', default='')
+    parser.add_argument('-u','--username', help='Radio Refrence Username', required=True)
+    parser.add_argument('-p','--password', help='Radio Refrence Password', required=True)
+    parser.add_argument('--talkgroups', help='Generate talkgroups file for system', action='store_true')
     parser.add_argument('--sdr_sample_rate', help='The sample rate of the SDRs in MHz', default='2.048')
     parser.add_argument('-g','--sdr_gain_value', help='The SDR gain value', default='49')
     parser.add_argument('--sdr_ppm_value', help='The SDR PPM value', default='0')
     parser.add_argument('--sdr_agc', help='Enable SDR ACG ', action='store_true')
-    parser.add_argument('--spectrum_bandwidth', help='The badwith of the channels in Khz', default='12.5')
-    parser.add_argument('-o','--output_dir', help='The directory to place the configs', default='')
-    parser.add_argument('-u','--username', help='Radio Refrence Username', required=True)
-    parser.add_argument('-p','--password', help='Radio Refrence Password', required=True)
+    parser.add_argument('--spectrum_bandwidth', help='The badwith of the channels in Khz', default='12.5')    
+    parser.add_argument('--print', help='Print config out', action='store_true')
+    parser.add_argument('-v','--print_radio_spacing', help='Print radio spacing config out', action='store_true')
+    parser.add_argument('--random_file_name', help='Append data to the filename', action='store_true')
+    parser.add_argument('--debug', help='Print debug info out', action='store_true')
 
     args = parser.parse_args()
 
@@ -282,10 +325,25 @@ def main():
     RR_USER = args.username
     RR_PASS = args.password
 
+    DOWNLOAD_TALKGROUPS = args.talkgroups
+    USE_RR_SITE_ID = args.use_rr_site_id
+    PRINT_RADIO_SPACING = args.print_radio_spacing
+    PRINT_DATA = args.print
+    RANDOM_FILE_NAME = args.random_file_name
+
     TR = tr_autotune()
 
     System = RR(SYSTEM, RR_USER, RR_PASS)
-    results = System.fetch_site_data(SITES)
+    results = System.fetch_site_data(SITES, use_rr_id=USE_RR_SITE_ID, add_metadata=DOWNLOAD_TALKGROUPS)
+
+    if DOWNLOAD_TALKGROUPS:
+        hex_dec = hex(int(talkgroup["tgDec"])).strip("0x")
+        talkgroups = results["talkgroups"]
+        with open(f"{SYSTEM}.talkgroups.csv", 'w') as f:
+            f.write("Decimal,Hex,Alpha Tag,Mode,Description,Tag,Category\n")
+            for talkgroup in talkgroups:
+                f.write(f'{talkgroup["tgDec"]},{hex_dec},{talkgroup["tgAlpha"]},{talkgroup["tgMode"].upper().replace("DE","E")},{talkgroup["tgDescr"]},{talkgroup["tag"]},{talkgroup["cat"]}\n')
+
 
 
     # Get Sites radio configs and list frequencies and channels
@@ -304,6 +362,9 @@ def main():
 
     for site in sites:
         result = TR.find_freqs(site["freqs"], SAMPLE_RATE, 12.5)
+        if PRINT_RADIO_SPACING:
+            print(f'**********************************************************************\nSITE {str(site["id"])} RADIO CONFIG\n**********************************************************************')
+            print(json.dumps(result, indent=4))
         
         sources = []
         for radio_index in result:
@@ -341,9 +402,16 @@ def main():
         else:
             filename = f"{site['id']}.{SYSTEM}.config.json"
 
+        if RANDOM_FILE_NAME:
+            filename = filename.strip('.json') + '.' + str(uuid.uuid4()) + '.json'
+
         with open(filename, 'w') as f:
             json.dump(config, f, indent=4)
         print(f"[+] Wrote config - {filename}")
+
+        if PRINT_DATA:
+            print(f'**********************************************************************\n{filename}\n**********************************************************************')
+            print(json.dumps(config, indent=4))
             
 
 if __name__ == "__main__":
