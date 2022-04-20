@@ -175,7 +175,7 @@ class tr_autotune:
             2.048,
             2.4,
             2.56,
-            2.8            
+            2.8
         ]
 
         # Get our bandwith's
@@ -341,7 +341,7 @@ def main():
     parser.add_argument('-p','--password', help='Radio Refrence Password', required=True)
     parser.add_argument('--talkgroups', help='Generate talkgroups file for system', action='store_true')
     parser.add_argument('-m','--merge', help='Merge sites into one config', action='store_true')
-    parser.add_argument('--sdr_sample_rate', help='The sample rate of the SDRs in MHz', default='2.048')
+    parser.add_argument('--sdr_sample_rate', help='The sample rate of the SDRs in MHz')
     parser.add_argument('-g','--sdr_gain_value', help='The SDR gain value', default='49')
     parser.add_argument('--sdr_ppm_value', help='The SDR PPM value', default='0')
     parser.add_argument('--sdr_agc', help='Enable SDR ACG ', action='store_true')
@@ -439,7 +439,7 @@ def main():
             payload = deepcopy(trunk_recorder_helper.source_template)
 
             payload["center"] = result["results"][radio_index]["center"]
-            payload["rate"] = int(result["bandwidth"])
+            payload["rate"] = int(TR.up_convert(float(result["bandwidth"]), TR.multipliers.mhz))
             payload["gain"] = int(SDR_GAIN_VALUE)
             payload["ppm"] = int(SDR_PPM_VALUE)
             payload["agc"] = SDR_AGC_VALUE
@@ -480,7 +480,7 @@ def main():
                 payload = deepcopy(trunk_recorder_helper.source_template)
 
                 payload["center"] = result[radio_index]["center"]
-                payload["rate"] = int(result["bandwidth"])
+                payload["rate"] = int(TR.up_convert(float(result["bandwidth"]), TR.multipliers.mhz))
                 payload["gain"] = int(SDR_GAIN_VALUE)
                 payload["ppm"] = int(SDR_PPM_VALUE)
                 payload["agc"] = SDR_AGC_VALUE
