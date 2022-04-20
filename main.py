@@ -301,6 +301,7 @@ def main():
     parser.add_argument('-u','--username', help='Radio Refrence Username', required=True)
     parser.add_argument('-p','--password', help='Radio Refrence Password', required=True)
     parser.add_argument('--talkgroups', help='Generate talkgroups file for system', action='store_true')
+    parser.add_argument('-m','--merge', help='Merge sites into one config', action='store_true')
     parser.add_argument('--sdr_sample_rate', help='The sample rate of the SDRs in MHz', default='2.048')
     parser.add_argument('-g','--sdr_gain_value', help='The SDR gain value', default='49')
     parser.add_argument('--sdr_ppm_value', help='The SDR PPM value', default='0')
@@ -317,6 +318,7 @@ def main():
     OUTPUT_DIR = args.output_dir
     SITES = args.sites
     SYSTEM = int(args.system)
+    SPECTRTUM_BANDWIDTH = args.spectrum_bandwidth
 
     SDR_GAIN_VALUE = args.sdr_gain_value
     SDR_PPM_VALUE = args.sdr_ppm_value
@@ -330,6 +332,7 @@ def main():
     PRINT_RADIO_SPACING = args.print_radio_spacing
     PRINT_DATA = args.print
     RANDOM_FILE_NAME = args.random_file_name
+    MERGE_SITES = args.merge
 
     TR = tr_autotune()
 
@@ -360,12 +363,32 @@ def main():
             "modulation": site["data"]["siteModulation"]
             })
 
-    for site in sites:
-        result = TR.find_freqs(site["freqs"], SAMPLE_RATE, 12.5)
-        if PRINT_RADIO_SPACING:
-            print(f'**********************************************************************\nSITE {str(site["id"])} RADIO CONFIG\n**********************************************************************')
-            print(json.dumps(result, indent=4))
+    if MERGE_SITES:
+        systems = []
+        main_freq_list = []
+        for site in sites:
+            main_freq_list.extend(site["freqs"])
         
+            system = deepcopy(trunk_recorder_helper.system_template)
+            site_type = system_types[results["system"]["sType"]]
+            if site_type == "p25":
+                if site["modulation"] == "CPQSK":
+                    modulation = "qpsk"
+                else:
+                    modulation = "fsk4"
+            else:
+                modulation = "fsk4"
+
+            system["type"] = site_type
+            system["modulation"] = modulation
+            system["control_channels"].extend(site["control_channels"])
+            systems.append(system)
+
+        result = TR.find_freqs(main_freq_list, SAMPLE_RATE, SPECTRTUM_BANDWIDTH)
+        if PRINT_RADIO_SPACING:
+            print(f'**********************************************************************\nSITE RADIO CONFIG\n**********************************************************************')
+            print(json.dumps(result, indent=4))
+
         sources = []
         for radio_index in result:
             payload = deepcopy(trunk_recorder_helper.source_template)
@@ -378,29 +401,15 @@ def main():
             payload["digitalRecorders"] = result[radio_index]["channels"]
 
             sources.append(payload)
-        
-        system = deepcopy(trunk_recorder_helper.system_template)
-        site_type = system_types[results["system"]["sType"]]
-        if site_type == "p25":
-            if site["modulation"] == "CPQSK":
-                modulation = "qpsk"
-            else:
-                modulation = "fsk4"
-        else:
-            modulation = "fsk4"
-
-        system["type"] = site_type
-        system["modulation"] = modulation
-        system["control_channels"].extend(site["control_channels"])
 
         config = deepcopy(trunk_recorder_helper.base)
-        config["systems"].append(system) 
+        config["systems"].append(systems) 
         config["sources"].extend(sources) 
-        
+
         if OUTPUT_DIR:
-            filename = f"{OUTPUT_DIR}/{site['id']}.{SYSTEM}.config.json"            
+            filename = f"{OUTPUT_DIR}/{SYSTEM}.merged.config.json"            
         else:
-            filename = f"{site['id']}.{SYSTEM}.config.json"
+            filename = f"{SYSTEM}.merged.config.json"
 
         if RANDOM_FILE_NAME:
             filename = filename.strip('.json') + '.' + str(uuid.uuid4()) + '.json'
@@ -412,7 +421,62 @@ def main():
         if PRINT_DATA:
             print(f'**********************************************************************\n{filename}\n**********************************************************************')
             print(json.dumps(config, indent=4))
+                
+        
+    else:
+        for site in sites:
+            result = TR.find_freqs(site["freqs"], SAMPLE_RATE, SPECTRTUM_BANDWIDTH)
+            if PRINT_RADIO_SPACING:
+                print(f'**********************************************************************\nSITE {str(site["id"])} RADIO CONFIG\n**********************************************************************')
+                print(json.dumps(result, indent=4))
             
+            sources = []
+            for radio_index in result:
+                payload = deepcopy(trunk_recorder_helper.source_template)
+
+                payload["center"] = result[radio_index]["center"]
+                payload["rate"] = int(TR.up_convert(SAMPLE_RATE, TR.multipliers.mhz))
+                payload["gain"] = int(SDR_GAIN_VALUE)
+                payload["ppm"] = int(SDR_PPM_VALUE)
+                payload["agc"] = SDR_AGC_VALUE
+                payload["digitalRecorders"] = result[radio_index]["channels"]
+
+                sources.append(payload)
+            
+            system = deepcopy(trunk_recorder_helper.system_template)
+            site_type = system_types[results["system"]["sType"]]
+            if site_type == "p25":
+                if site["modulation"] == "CPQSK":
+                    modulation = "qpsk"
+                else:
+                    modulation = "fsk4"
+            else:
+                modulation = "fsk4"
+
+            system["type"] = site_type
+            system["modulation"] = modulation
+            system["control_channels"].extend(site["control_channels"])
+
+            config = deepcopy(trunk_recorder_helper.base)
+            config["systems"].append(system) 
+            config["sources"].extend(sources) 
+            
+            if OUTPUT_DIR:
+                filename = f"{OUTPUT_DIR}/{site['id']}.{SYSTEM}.config.json"            
+            else:
+                filename = f"{site['id']}.{SYSTEM}.config.json"
+
+            if RANDOM_FILE_NAME:
+                filename = filename.strip('.json') + '.' + str(uuid.uuid4()) + '.json'
+
+            with open(filename, 'w') as f:
+                json.dump(config, f, indent=4)
+            print(f"[+] Wrote config - {filename}")
+
+            if PRINT_DATA:
+                print(f'**********************************************************************\n{filename}\n**********************************************************************')
+                print(json.dumps(config, indent=4))
+                
 
 if __name__ == "__main__":
     main()
