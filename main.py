@@ -113,10 +113,10 @@ class tr_autotune:
         mhz = 1e+6
 
     def down_convert(self, value, multiplier):
-        return (float(value) / multiplier).__round__(4)
+        return (value / multiplier).__round__(4)
 
     def up_convert(self, value, multiplier):
-        return (float(value) * multiplier).__round__(4)
+        return (value * multiplier).__round__(4)
 
     def clean_frequencies(self, freqs):
         new_freqs = []
@@ -163,12 +163,24 @@ class tr_autotune:
         return center
     ########################################################################
 
-    def find_freqs(self, SYSTEM_FREQ_LIST, SDR_BANDWIDTH=2.048, SPECTRUM_BANDWIDTH=12.5, debug=False ):
+    def find_freqs(self, SYSTEM_FREQ_LIST, SDR_BANDWIDTH=None, SPECTRUM_BANDWIDTH=12.5, debug=False ):
         # sort our freqs low to high
         SYSTEM_FREQS = self.clean_frequencies(SYSTEM_FREQ_LIST)
 
+        SDR_BANDWIDTH_OPTIONS = [
+            1.024,
+            1.4,
+            1.8,
+            1.92,
+            2.048,
+            2.4,
+            2.56,
+            2.8            
+        ]
+
         # Get our bandwith's
-        sdr_bandwidth = self.up_convert(SDR_BANDWIDTH, self.multipliers.mhz)
+        # sdr_bandwidth = self.up_convert(SDR_BANDWIDTH, self.multipliers.mhz)
+        SPECTRUM_BANDWIDTH = float(SPECTRUM_BANDWIDTH)
         spectrum_bandwidth = self.up_convert(SPECTRUM_BANDWIDTH, self.multipliers.khz)
         half_spectrum_bandwidth = spectrum_bandwidth / 2
 
@@ -183,13 +195,13 @@ class tr_autotune:
         total_coverage_bandwidth = (upper_edge + half_spectrum_bandwidth) - (lower_edge - half_spectrum_bandwidth)
 
         # get radios needed
-        sdr_remainder = total_coverage_bandwidth / sdr_bandwidth
-        sdr_needed = int(math.ceil(sdr_remainder))
+        # sdr_remainder = total_coverage_bandwidth / sdr_bandwidth
+        # sdr_needed = int(math.ceil(sdr_remainder))
 
-        bandwith_per_sdr = total_coverage_bandwidth / sdr_needed
-        #bandwith_per_sdr = spectrum_bandwidth
+        # bandwith_per_sdr = total_coverage_bandwidth / sdr_needed
+        # #bandwith_per_sdr = spectrum_bandwidth
 
-        leftover_bandwith = (sdr_bandwidth * sdr_needed) - total_coverage_bandwidth
+        # leftover_bandwith = (sdr_bandwidth * sdr_needed) - total_coverage_bandwidth
 
         if debug:
             # Print out info on decoding
@@ -198,8 +210,34 @@ class tr_autotune:
             print(f"[+] Lowest frequency - {self.down_convert(lower_freq, self.multipliers.mhz)}")
             print(f"[-] Lower Limit - {self.down_convert(lower_edge, self.multipliers.mhz)}")
             print(f"[+] Total bandwidth to cover - {self.down_convert(total_coverage_bandwidth, self.multipliers.mhz)}")
-            print(f"[+] Total Leftover SDR bandwidth - {self.down_convert(leftover_bandwith, self.multipliers.mhz)}")
+            #print(f"[+] Total Leftover SDR bandwidth - {self.down_convert(leftover_bandwith, self.multipliers.mhz)}")
     
+        if SDR_BANDWIDTH:
+            radios = self.do_a_math(SYSTEM_FREQS, half_spectrum_bandwidth, lower_edge, self.up_convert(SDR_BANDWIDTH, self.multipliers.mhz))
+            if debug:
+                print(f"[+] Total Radios Needed - {str(len(radios))}")
+            return {"bandwidth": self.up_convert(SDR_BANDWIDTH, self.multipliers.mhz), "results": radios}
+        else:           
+            print("[+] Tring to find the right SDR bandwidth") 
+            results = []
+            for sdr_bandwidth_option in SDR_BANDWIDTH_OPTIONS:
+                radios = self.do_a_math(SYSTEM_FREQS, half_spectrum_bandwidth, lower_edge, self.up_convert(sdr_bandwidth_option, self.multipliers.mhz))
+                results.append({"bandwidth": sdr_bandwidth_option, "results": radios})
+
+            lowest_radio_count = 1e6
+            final_result = None
+            sorted_results = sorted(results, key=lambda item: item["bandwidth"], reverse=True)
+            for result in sorted_results:
+                if len(result["results"]) <= lowest_radio_count:
+                    if debug:
+                        print(f"[+] Found new best SDR Bandwidth - {self.up_convert(result['bandwidth'], self.multipliers.mhz)} - {len(result['results'])}") 
+                    lowest_radio_count = len(radios)
+                    final_result = result
+            return final_result
+
+
+
+    def do_a_math(self, SYSTEM_FREQS, half_spectrum_bandwidth, lower_edge, sdr_bandwidth):
 
         radio_high_freq, indexed_channels, radio_index = 0, 0, 1
         # System Channel count minux one for zero index
@@ -251,6 +289,7 @@ class tr_autotune:
                 lower_freq = int(SYSTEM_FREQS[indexed_channels] - half_spectrum_bandwidth)
                 # Set to the max sdr reciveable bandwidth from the lower_freq
                 max_sdr_useable_freq = int((lower_freq + half_spectrum_bandwidth) + sdr_bandwidth)
+                #print(f"PREV: {lower_freq}  - NEXT: {max_sdr_useable_freq}")
             
         self.validate_coverage(radio_matrixes, SYSTEM_FREQS)
         return radio_matrixes
@@ -314,7 +353,12 @@ def main():
 
     args = parser.parse_args()
 
-    SAMPLE_RATE = float(args.sdr_sample_rate)
+    print("[+] TR Auto config by Alertpage & @MAXWELLDPS")
+
+    if args.sdr_sample_rate:
+        SAMPLE_RATE = float(args.sdr_sample_rate)
+    else:
+        SAMPLE_RATE = None
     OUTPUT_DIR = args.output_dir
     SITES = args.sites
     SYSTEM = int(args.system)
@@ -333,6 +377,7 @@ def main():
     PRINT_DATA = args.print
     RANDOM_FILE_NAME = args.random_file_name
     MERGE_SITES = args.merge
+    DEBUG = args.debug
 
     TR = tr_autotune()
 
@@ -355,7 +400,7 @@ def main():
         freqs = [float(freq["freq"]) for freq in site["data"]["siteFreqs"]]
         control_channels = []
         for freq in site["data"]["siteFreqs"]:
-            if freq["use"]: control_channels.append(int(TR.up_convert(freq['freq'], TR.multipliers.mhz)))
+            if freq["use"]: control_channels.append(int(TR.up_convert(float(freq['freq']), TR.multipliers.mhz)))
         sites.append({
             "id": site["data"]["siteNumber"],
             "freqs": freqs,
@@ -384,21 +429,21 @@ def main():
             system["control_channels"].extend(site["control_channels"])
             systems.append(system)
 
-        result = TR.find_freqs(main_freq_list, SAMPLE_RATE, SPECTRTUM_BANDWIDTH)
+        result = TR.find_freqs(main_freq_list, SAMPLE_RATE, SPECTRTUM_BANDWIDTH, debug=DEBUG)
         if PRINT_RADIO_SPACING:
             print(f'**********************************************************************\nSITE RADIO CONFIG\n**********************************************************************')
             print(json.dumps(result, indent=4))
 
         sources = []
-        for radio_index in result:
+        for radio_index in result["results"]:
             payload = deepcopy(trunk_recorder_helper.source_template)
 
-            payload["center"] = result[radio_index]["center"]
-            payload["rate"] = int(TR.up_convert(SAMPLE_RATE, TR.multipliers.mhz))
+            payload["center"] = result["results"][radio_index]["center"]
+            payload["rate"] = int(result["bandwidth"])
             payload["gain"] = int(SDR_GAIN_VALUE)
             payload["ppm"] = int(SDR_PPM_VALUE)
             payload["agc"] = SDR_AGC_VALUE
-            payload["digitalRecorders"] = result[radio_index]["channels"]
+            payload["digitalRecorders"] = result["results"][radio_index]["channels"]
 
             sources.append(payload)
 
@@ -425,17 +470,17 @@ def main():
         
     else:
         for site in sites:
-            result = TR.find_freqs(site["freqs"], SAMPLE_RATE, SPECTRTUM_BANDWIDTH)
+            result = TR.find_freqs(site["freqs"], SAMPLE_RATE, SPECTRTUM_BANDWIDTH, debug=DEBUG)
             if PRINT_RADIO_SPACING:
                 print(f'**********************************************************************\nSITE {str(site["id"])} RADIO CONFIG\n**********************************************************************')
                 print(json.dumps(result, indent=4))
             
             sources = []
-            for radio_index in result:
+            for radio_index in result["results"]:
                 payload = deepcopy(trunk_recorder_helper.source_template)
 
                 payload["center"] = result[radio_index]["center"]
-                payload["rate"] = int(TR.up_convert(SAMPLE_RATE, TR.multipliers.mhz))
+                payload["rate"] = int(result["bandwidth"])
                 payload["gain"] = int(SDR_GAIN_VALUE)
                 payload["ppm"] = int(SDR_PPM_VALUE)
                 payload["agc"] = SDR_AGC_VALUE
