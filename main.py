@@ -441,7 +441,7 @@ def main():
             payload = deepcopy(trunk_recorder_helper.source_template)
 
             payload["center"] = result["results"][radio_index]["center"]
-            payload["rate"] = int(result["results"][radio_index]["center"])
+            payload["rate"] = int(result["results"][radio_index]["sample_rate"])
             payload["gain"] = int(SDR_GAIN_VALUE)
             payload["ppm"] = int(SDR_PPM_VALUE)
             payload["agc"] = SDR_AGC_VALUE
@@ -482,7 +482,7 @@ def main():
                 payload = deepcopy(trunk_recorder_helper.source_template)
 
                 payload["center"] = result[radio_index]["center"]
-                payload["rate"] = int(TR.up_convert(float(result["bandwidth"]), TR.multipliers.mhz))
+                payload["rate"] = int(result["results"][radio_index]["sample_rate"])
                 payload["gain"] = int(SDR_GAIN_VALUE)
                 payload["ppm"] = int(SDR_PPM_VALUE)
                 payload["agc"] = SDR_AGC_VALUE
