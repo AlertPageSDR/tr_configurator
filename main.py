@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 import argparse
 from binascii import crc32
 import datetime
@@ -272,6 +274,11 @@ class tr_autotune:
             # get the total bandwidth needing covered
             radio_sample_range = (radio_high_freq - lower_freq) + (half_spectrum_bandwidth * 2)
 
+
+            if radio_sample_range < 900000:
+                diff = 900000 - radio_sample_range
+                radio_sample_range += diff
+
             # Check if the sample rate is valid
             is_divisable_by_eight = radio_sample_range % 8 == 0
 
@@ -302,7 +309,7 @@ class trunk_recorder_helper:
         "rate": 0,
         "ppm": 0,
         "gain": 49,
-        "agc": True,
+        "agc": False,
         "digitalRecorders": 4,
         "analogRecorders": 0,
         "driver": "osmosdr",
@@ -344,31 +351,49 @@ def main():
     parser.add_argument('--talkgroups', help='Generate talkgroups file for system', action='store_true')
     parser.add_argument('-m','--merge', help='Merge sites into one config', action='store_true')
     parser.add_argument('--sdr_max_sample_rate', help='The max sample rate of the SDRs in MHz')
-    parser.add_argument('-g','--sdr_gain_value', help='The SDR gain value', default='49')
-    parser.add_argument('--sdr_ppm_value', help='The SDR PPM value', default='0')
-    parser.add_argument('--sdr_agc', help='Enable SDR ACG ', action='store_true')
+    parser.add_argument('--sdr_fixed_sample_rate', help='Fix the sample rate of the SDRs in MHz')
     parser.add_argument('--spectrum_bandwidth', help='The badwith of the channels in Khz', default='12.5')    
     parser.add_argument('--print', help='Print config out', action='store_true')
     parser.add_argument('-v','--print_radio_spacing', help='Print radio spacing config out', action='store_true')
-    parser.add_argument('--random_file_name', help='Append data to the filename', action='store_true')
+    parser.add_argument('--random_file_name', help='Append UUID to the filename', action='store_true')
     parser.add_argument('--debug', help='Print debug info out', action='store_true')
 
     args = parser.parse_args()
 
-    print("[+] TR Auto config by Alertpage & @MAXWELLDPS")
 
-    if args.sdr_max_sample_rate:
-        SAMPLE_RATE = float(args.sdr_max_sample_rate)
+    print(
+        """
+___ ____ _  _ _  _ _  _    ____ ____ ____ ____ ____ ___  ____ ____ 
+ |  |__/ |  | |\ | |_/  __ |__/ |___ |    |  | |__/ |  \ |___ |__/ 
+ |  |  \ |__| | \| | \_    |  \ |___ |___ |__| |  \ |__/ |___ |  \ 
+                                                                   
+____ ____ _  _ ____ _ ____ _  _ ____ ____ ___ ____ ____            
+|    |  | |\ | |___ | | __ |  | |__/ |__|  |  |  | |__/            
+|___ |__| | \| |    | |__] |__| |  \ |  |  |  |__| |  \            
+                                                                                                                        
+By AlertPage
+                                            
+        """
+    )
+
+    if args.sdr_max_sample_rate and args.sdr_fixed_sample_rate:
+        raise ValueError("You can only use '--sdr_max_sample_rate' or '--sdr_fixed_sample_rate' ")
+
+    FIXED_SAMPLE_RATE = None
+    if args.sdr_fixed_sample_rate:
+        FIXED_SAMPLE_RATE = float(args.sdr_fixed_sample_rate)
+
+    if FIXED_SAMPLE_RATE:
+        SAMPLE_RATE =  FIXED_SAMPLE_RATE
     else:
         SAMPLE_RATE = 3.2
+    if args.sdr_max_sample_rate:
+        SAMPLE_RATE = float(args.sdr_max_sample_rate)
+        
     OUTPUT_DIR = args.output_dir
     SITES = args.sites
     SYSTEM = int(args.system)
     SPECTRTUM_BANDWIDTH = args.spectrum_bandwidth
-
-    SDR_GAIN_VALUE = args.sdr_gain_value
-    SDR_PPM_VALUE = args.sdr_ppm_value
-    SDR_AGC_VALUE = args.sdr_agc
 
     RR_USER = args.username
     RR_PASS = args.password
@@ -441,10 +466,11 @@ def main():
             payload = deepcopy(trunk_recorder_helper.source_template)
 
             payload["center"] = result["results"][radio_index]["center"]
-            payload["rate"] = int(result["results"][radio_index]["sample_rate"])
-            payload["gain"] = int(SDR_GAIN_VALUE)
-            payload["ppm"] = int(SDR_PPM_VALUE)
-            payload["agc"] = SDR_AGC_VALUE
+            if FIXED_SAMPLE_RATE:
+                payload["rate"] = int(TR.up_convert(FIXED_SAMPLE_RATE, TR.multipliers.mhz))
+            else:
+                payload["rate"] = int(result["results"][radio_index]["sample_rate"])
+            payload["device"] = f"rtl={str(radio_index-1)}"
             payload["digitalRecorders"] = result["results"][radio_index]["channels"]
 
             sources.append(payload)
@@ -483,9 +509,7 @@ def main():
 
                 payload["center"] = result[radio_index]["center"]
                 payload["rate"] = int(result["results"][radio_index]["sample_rate"])
-                payload["gain"] = int(SDR_GAIN_VALUE)
-                payload["ppm"] = int(SDR_PPM_VALUE)
-                payload["agc"] = SDR_AGC_VALUE
+                payload["device"] = f"rtl={str(radio_index-1)}"
                 payload["digitalRecorders"] = result[radio_index]["channels"]
 
                 sources.append(payload)
