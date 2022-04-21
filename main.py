@@ -508,7 +508,10 @@ By AlertPage
                 payload = deepcopy(trunk_recorder_helper.source_template)
 
                 payload["center"] = result["results"][radio_index]["center"]
-                payload["rate"] = int(result["results"][radio_index]["sample_rate"])
+                if FIXED_SAMPLE_RATE:
+                    payload["rate"] = int(TR.up_convert(FIXED_SAMPLE_RATE, TR.multipliers.mhz))
+                else:
+                    payload["rate"] = int(result["results"][radio_index]["sample_rate"])
                 payload["device"] = f"rtl={str(radio_index-1)}"
                 payload["digitalRecorders"] = result["results"][radio_index]["channels"]
 
