@@ -232,7 +232,7 @@ class tr_autotune:
         
         radio_high_freq, indexed_channels, radio_index = 0, 0, 1
         # System Channel count minux one for zero index
-        channels = len(SYSTEM_FREQS) - 1
+        channels = len(SYSTEM_FREQS) 
 
         # Dict to hold our results
         radio_matrixes = {}
@@ -295,7 +295,7 @@ class tr_autotune:
             # Check we havent reacherd the end of our channels
             if indexed_channels <=  channels:
                 # Set to the next freq in the list minus half the spectrum BW
-                lower_freq = int(SYSTEM_FREQS[indexed_channels] - half_spectrum_bandwidth)
+                lower_freq = int(SYSTEM_FREQS[indexed_channels-1] - half_spectrum_bandwidth)
                 # Set to the max sdr reciveable bandwidth from the lower_freq
                 max_sdr_useable_freq = int((lower_freq + half_spectrum_bandwidth) + sdr_bandwidth)
                 #print(f"PREV: {lower_freq}  - NEXT: {max_sdr_useable_freq}")
