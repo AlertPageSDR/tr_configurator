@@ -10,7 +10,7 @@ from copy import deepcopy
 
 from zeep import Client, helpers, exceptions
 
-
+VERSION = "0.2.0-dev"
 
 system_types = {
     1: "smartnet",
@@ -354,7 +354,7 @@ def fetchSystemData(SYSTEMS, DOWNLOAD_TALKGROUPS, RR_USER, RR_PASS, USE_RR_SITE_
 
         if DOWNLOAD_TALKGROUPS:
             talkgroups = results["talkgroups"]
-            with open(f"{SYSTEM}.talkgroups.csv", 'w') as f:
+            with open(f"{SYSTEM['system_id']}.talkgroups.csv", 'w') as f:
                 f.write("Decimal,Hex,Alpha Tag,Mode,Description,Tag,Category\n")
                 for talkgroup in talkgroups:
                     hex_dec = hex(int(talkgroup["tgDec"])).strip("0x")
@@ -402,7 +402,7 @@ def startup():
     
 
     print(
-        """
+        f"""
 ___ ____ _  _ _  _ _  _    ____ ____ ____ ____ ____ ___  ____ ____ 
  |  |__/ |  | |\ | |_/  __ |__/ |___ |    |  | |__/ |  \ |___ |__/ 
  |  |  \ |__| | \| | \_    |  \ |___ |___ |__| |  \ |__/ |___ |  \ 
@@ -412,7 +412,7 @@ ____ ____ _  _ ____ _ ____ _  _ ____ ____ ___ ____ ____
 |___ |__| | \| |    | |__] |__| |  \ |  |  |  |__| |  \            
                                                                                                                         
 By AlertPage
-                                            
+ver. {VERSION}                                            
         """
     )
     return parser.parse_args()
