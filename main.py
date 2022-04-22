@@ -339,7 +339,8 @@ class trunk_recorder_helper:
         "captureDir": "",
         "logLevel": "info",
         "broadcastSignals": True,
-        "frequencyFormat": "mhz"
+        "frequencyFormat": "mhz",
+        "logFile": True,
         }
 
 def fetchSystemData(SYSTEMS, DOWNLOAD_TALKGROUPS, RR_USER, RR_PASS, USE_RR_SITE_ID):
