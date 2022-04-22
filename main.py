@@ -8,7 +8,7 @@ import logging
 import decimal
 from copy import deepcopy
 
-from zeep import Client, helpers
+from zeep import Client, helpers, exceptions
 
 
 
@@ -384,20 +384,22 @@ def fetchSystemData(SYSTEMS, DOWNLOAD_TALKGROUPS, RR_USER, RR_PASS, USE_RR_SITE_
 
 def startup():
     parser = argparse.ArgumentParser(description='Generate TR config with RR data')
-    parser.add_argument('-r','--use_rr_site_id', help='Use RR site ID', action='store_true')
     parser.add_argument('-s','--system', nargs='+', help='List of Systems : site pairs "SystemID:siteID,siteID"', required=True)
+    parser.add_argument('-r','--use_rr_site_id', help='Use RR DB site ids', action='store_true')
+    parser.add_argument('-u','--username', help='Radio Reference Username', required=True)
+    parser.add_argument('-p','--password', help='Radio Reference Password', required=True)
     parser.add_argument('-o','--output_dir', help='The directory to place the configs', default='')
-    parser.add_argument('-u','--username', help='Radio Refrence Username', required=True)
-    parser.add_argument('-p','--password', help='Radio Refrence Password', required=True)
-    parser.add_argument('--talkgroups', help='Generate talkgroups file for system', action='store_true')
-    parser.add_argument('-m','--merge', help='Merge sites into one config', action='store_true')
-    parser.add_argument('--sdr_max_sample_rate', help='The max sample rate of the SDRs in MHz')
-    parser.add_argument('--sdr_fixed_sample_rate', help='Fix the sample rate of the SDRs in MHz')
-    parser.add_argument('--spectrum_bandwidth', help='The badwith of the channels in Khz', default='12.5')    
-    parser.add_argument('--print', help='Print config out', action='store_true')
+    parser.add_argument('-t','--talkgroups', help='Generate talkgroups file for system', action='store_true')
+    parser.add_argument('-m','--merge', help='Merge systems into one config', action='store_true')
+    parser.add_argument('-l','--loglevel', help='Set log level [debug, info, warning]', default='warning')
+    parser.add_argument('-P','--print', help='Print generated config(s) out', action='store_true')
+    # Advanced 
+    parser.add_argument('-sm','--sdr_max_sample_rate', help='The max sample rate of the SDRs in MHz')
+    parser.add_argument('-sf','--sdr_fixed_sample_rate', help='Fix the sample rate of the SDRs in MHz')
+    parser.add_argument('-sb','--spectrum_bandwidth', help='The badwith of the channels in Khz', default='12.5')    
     parser.add_argument('-rs','--print_radio_spacing', help='Print radio spacing config out', action='store_true')
-    parser.add_argument('--random_file_name', help='Append UUID to the filename', action='store_true')
-    parser.add_argument('-l','--loglevel', help='Set log level debug, info, warning', default='warning')
+    parser.add_argument('-rf','--random_file_name', help='Append UUID to the filename', action='store_true')
+    
 
     print(
         """
@@ -415,10 +417,10 @@ By AlertPage
     )
     return parser.parse_args()
 
+
 def main():
     args = startup()
 
-    
     if args.loglevel.lower() == "debug":
         logging.basicConfig(level=logging.DEBUG)
     elif args.loglevel.lower() == "info":
@@ -426,29 +428,11 @@ def main():
     else:
         logging.basicConfig(level=logging.WARNING)
     
-
     if args.sdr_max_sample_rate and args.sdr_fixed_sample_rate:
-        raise ValueError("You can only use '--sdr_max_sample_rate' or '--sdr_fixed_sample_rate' ")
+        logging.critical("[!] You can only use '--sdr_max_sample_rate' or '--sdr_fixed_sample_rate' ")
+        exit()
 
-    FIXED_SAMPLE_RATE = None
-    if args.sdr_fixed_sample_rate:
-        FIXED_SAMPLE_RATE = float(args.sdr_fixed_sample_rate)
-
-    if FIXED_SAMPLE_RATE:
-        SAMPLE_RATE =  FIXED_SAMPLE_RATE
-    else:
-        SAMPLE_RATE = 3.2
-    if args.sdr_max_sample_rate:
-        SAMPLE_RATE = float(args.sdr_max_sample_rate)
-        
-
-    SYSTEMS = []
-    for system_pair in args.system:
-        data = {
-            "system_id": system_pair.split(":")[0],
-            "sites": system_pair.split(":")[1].split(",")
-        }
-        SYSTEMS.append(data)
+    TR = tr_autotune()
 
     OUTPUT_DIR = args.output_dir
     SPECTRTUM_BANDWIDTH = args.spectrum_bandwidth
@@ -463,17 +447,36 @@ def main():
     RANDOM_FILE_NAME = args.random_file_name
     MERGE_SITES = args.merge
 
-    TR = tr_autotune()
+    SAMPLE_RATE = 3.2
+    FIXED_SAMPLE_RATE = None
+    if args.sdr_fixed_sample_rate:
+        FIXED_SAMPLE_RATE = float(args.sdr_fixed_sample_rate)
+        SAMPLE_RATE =  FIXED_SAMPLE_RATE
 
-    SYSTEM_RESULTS = fetchSystemData(
-        SYSTEMS,
-        DOWNLOAD_TALKGROUPS,
-        RR_USER,
-        RR_PASS,
-        USE_RR_SITE_ID
-    )
+    if args.sdr_max_sample_rate:
+        SAMPLE_RATE = float(args.sdr_max_sample_rate)
+        
+    try:
+        SYSTEMS = []
+        for system_pair in args.system:
+            data = {
+                "system_id": system_pair.split(":")[0],
+                "sites": system_pair.split(":")[1].split(",")
+            }
+            SYSTEMS.append(data)
+    except:
+        logging.critical("[!] Systems must be in '--system <SYSTEM ID>:<SITE ID>,<SITE ID> <SYSTEM ID>:<SITE ID>' notation")
 
-    
+    try:
+        SYSTEM_RESULTS = fetchSystemData(
+            SYSTEMS,
+            DOWNLOAD_TALKGROUPS,
+            RR_USER,
+            RR_PASS,
+            USE_RR_SITE_ID
+        )
+    except exceptions.Fault:
+        logging.critical("[!] Invalid Radio Reference Username or Password")
 
     if MERGE_SITES:
         systems = []
