@@ -339,7 +339,8 @@ class trunk_recorder_helper:
         "captureDir": "",
         "logLevel": "info",
         "broadcastSignals": True,
-        "frequencyFormat": "mhz"
+        "frequencyFormat": "mhz",
+        "logFile": True,
         }
 
 def fetchSystemData(SYSTEMS, DOWNLOAD_TALKGROUPS, RR_USER, RR_PASS, USE_RR_SITE_ID):
@@ -416,7 +417,6 @@ ver. {VERSION}
         """
     )
     return parser.parse_args()
-
 
 def main():
     args = startup()
@@ -520,7 +520,7 @@ def main():
             sources.append(payload)
 
         config = deepcopy(trunk_recorder_helper.base)
-        config["systems"].append(systems) 
+        config["systems"].extend(systems) 
         config["sources"].extend(sources) 
 
         system_id_string = ".".join([system["system_id"] for system in SYSTEMS])
@@ -584,7 +584,7 @@ def main():
                 sources.append(payload)
 
             config = deepcopy(trunk_recorder_helper.base)
-            config["systems"].append(systems) 
+            config["systems"].extend(systems) 
             config["sources"].extend(sources) 
 
             if OUTPUT_DIR:
@@ -602,5 +602,6 @@ def main():
                 print(json.dumps(config, indent=4))
                 
     logging.warning("[+] TR CONFIGURATOR HAS FINISHED")
+
 if __name__ == "__main__":
     main()
