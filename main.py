@@ -343,8 +343,7 @@ class trunk_recorder_helper:
 def main():
     parser = argparse.ArgumentParser(description='Generate TR config with RR data')
     parser.add_argument('-r','--use_rr_site_id', help='Use RR site ID', action='store_true')
-    parser.add_argument('-s','--sites', nargs='+', help='Sites to generate configs for. space seperated', required=True)
-    parser.add_argument('--system', help='System to generate configs for', required=True)
+    parser.add_argument('-s','--system', nargs='+', help='List of Systems : site pairs "SystemID:siteID,siteID"', required=True)
     parser.add_argument('-o','--output_dir', help='The directory to place the configs', default='')
     parser.add_argument('-u','--username', help='Radio Refrence Username', required=True)
     parser.add_argument('-p','--password', help='Radio Refrence Password', required=True)
@@ -390,9 +389,16 @@ By AlertPage
     if args.sdr_max_sample_rate:
         SAMPLE_RATE = float(args.sdr_max_sample_rate)
         
+
+    SYSTEMS = []
+    for system_pair in args.system:
+        data = {
+            "system_id": system_pair.split(":")[0],
+            "sites": system_pair.split(":")[1].split(",")
+        }
+        SYSTEMS.append(data)
+
     OUTPUT_DIR = args.output_dir
-    SITES = args.sites
-    SYSTEM = int(args.system)
     SPECTRTUM_BANDWIDTH = args.spectrum_bandwidth
 
     RR_USER = args.username
@@ -408,53 +414,63 @@ By AlertPage
 
     TR = tr_autotune()
 
-    System = RR(SYSTEM, RR_USER, RR_PASS)
-    results = System.fetch_site_data(SITES, use_rr_id=USE_RR_SITE_ID, add_metadata=DOWNLOAD_TALKGROUPS)
-
-    if DOWNLOAD_TALKGROUPS:
-        talkgroups = results["talkgroups"]
-        with open(f"{SYSTEM}.talkgroups.csv", 'w') as f:
-            f.write("Decimal,Hex,Alpha Tag,Mode,Description,Tag,Category\n")
-            for talkgroup in talkgroups:
-                hex_dec = hex(int(talkgroup["tgDec"])).strip("0x")
-                f.write(f'{talkgroup["tgDec"]},{hex_dec},{talkgroup["tgAlpha"]},{talkgroup["tgMode"].upper().replace("DE","E")},{talkgroup["tgDescr"]},{talkgroup["tag"]},{talkgroup["cat"]}\n')
-
-
+    SYSTEM_RESULTS = []
 
     # Get Sites radio configs and list frequencies and channels
-    sites = []
-    for site in results["sites"]:
-        freqs = [float(freq["freq"]) for freq in site["data"]["siteFreqs"]]
-        control_channels = []
-        for freq in site["data"]["siteFreqs"]:
-            if freq["use"]: control_channels.append(int(TR.up_convert(float(freq['freq']), TR.multipliers.mhz)))
-        sites.append({
-            "id": site["data"]["siteNumber"],
-            "freqs": freqs,
-            "control_channels": control_channels,
-            "modulation": site["data"]["siteModulation"]
-            })
+    for SYSTEM in SYSTEMS:
+        System = RR(SYSTEM["system_id"], RR_USER, RR_PASS)
+        results = System.fetch_site_data(SYSTEM["sites"], use_rr_id=USE_RR_SITE_ID, add_metadata=DOWNLOAD_TALKGROUPS)
+
+        if DOWNLOAD_TALKGROUPS:
+            talkgroups = results["talkgroups"]
+            with open(f"{SYSTEM}.talkgroups.csv", 'w') as f:
+                f.write("Decimal,Hex,Alpha Tag,Mode,Description,Tag,Category\n")
+                for talkgroup in talkgroups:
+                    hex_dec = hex(int(talkgroup["tgDec"])).strip("0x")
+                    f.write(f'{talkgroup["tgDec"]},{hex_dec},{talkgroup["tgAlpha"]},{talkgroup["tgMode"].upper().replace("DE","E")},{talkgroup["tgDescr"]},{talkgroup["tag"]},{talkgroup["cat"]}\n')
+
+        sites = []
+        for site in results["sites"]:
+            freqs = [float(freq["freq"]) for freq in site["data"]["siteFreqs"]]
+            control_channels = []
+            for freq in site["data"]["siteFreqs"]:
+                if freq["use"]: control_channels.append(int(TR.up_convert(float(freq['freq']), TR.multipliers.mhz)))
+
+            payload = {
+                "id": site["data"]["siteNumber"],
+                "freqs": freqs,
+                "control_channels": control_channels,
+                "modulation": site["data"]["siteModulation"]
+                }
+            sites.append(payload)
+
+        SYSTEM_RESULTS.append({
+            "system_id": SYSTEM["system_id"],
+            "sites": sites,
+            "system_type": results["system"]["sType"]
+        })
 
     if MERGE_SITES:
         systems = []
         main_freq_list = []
-        for site in sites:
-            main_freq_list.extend(site["freqs"])
+        for system in SYSTEM_RESULTS:          
+            for site in system["sites"]:
+                system_json = deepcopy(trunk_recorder_helper.system_template)
+                main_freq_list.extend(site["freqs"])
         
-            system = deepcopy(trunk_recorder_helper.system_template)
-            site_type = system_types[results["system"]["sType"]]
-            if site_type == "p25":
-                if site["modulation"] == "CPQSK":
-                    modulation = "qpsk"
+                site_type = system_types[system["system_type"]]
+                if site_type == "p25":
+                    if site["modulation"] == "CPQSK":
+                        modulation = "qpsk"
+                    else:
+                        modulation = "fsk4"
                 else:
                     modulation = "fsk4"
-            else:
-                modulation = "fsk4"
 
-            system["type"] = site_type
-            system["modulation"] = modulation
-            system["control_channels"].extend(site["control_channels"])
-            systems.append(system)
+                system_json["type"] = site_type
+                system_json["modulation"] = modulation
+                system_json["control_channels"].extend(site["control_channels"])
+                systems.append(system_json)
 
         result = TR.find_freqs(main_freq_list, SAMPLE_RATE, SPECTRTUM_BANDWIDTH, debug=DEBUG)
         if PRINT_RADIO_SPACING:
@@ -479,10 +495,11 @@ By AlertPage
         config["systems"].append(systems) 
         config["sources"].extend(sources) 
 
+        system_id_string = ".".join([system["system_id"] for system in SYSTEMS])
         if OUTPUT_DIR:
-            filename = f"{OUTPUT_DIR}/{SYSTEM}.merged.config.json"            
+            filename = f"{OUTPUT_DIR}/{system_id_string}.merged.config.json"            
         else:
-            filename = f"{SYSTEM}.merged.config.json"
+            filename = f"{system_id_string}.merged.config.json"
 
         if RANDOM_FILE_NAME:
             filename = filename.strip('.json') + '.' + str(uuid.uuid4()) + '.json'
@@ -497,12 +514,33 @@ By AlertPage
                 
         
     else:
-        for site in sites:
-            result = TR.find_freqs(site["freqs"], SAMPLE_RATE, SPECTRTUM_BANDWIDTH, debug=DEBUG)
-            if PRINT_RADIO_SPACING:
-                print(f'**********************************************************************\nSITE {str(site["id"])} RADIO CONFIG\n**********************************************************************')
-                print(json.dumps(result, indent=4))
+        for system in SYSTEM_RESULTS:
+            systems = []
+            main_freq_list = []
             
+
+            for site in system["sites"]:
+                main_freq_list.extend(site["freqs"])
+                system_json = deepcopy(trunk_recorder_helper.system_template)
+                site_type = system_types[system["system_type"]]
+                if site_type == "p25":
+                    if site["modulation"] == "CPQSK":
+                        modulation = "qpsk"
+                    else:
+                        modulation = "fsk4"
+                else:
+                    modulation = "fsk4"
+
+                system_json["type"] = site_type
+                system_json["modulation"] = modulation
+                system_json["control_channels"].extend(site["control_channels"])
+                systems.append(system_json)
+
+            result = TR.find_freqs(main_freq_list, SAMPLE_RATE, SPECTRTUM_BANDWIDTH, debug=DEBUG)
+            if PRINT_RADIO_SPACING:
+                print(f'**********************************************************************\nSITE RADIO CONFIG\n**********************************************************************')
+                print(json.dumps(result, indent=4))
+
             sources = []
             for radio_index in result["results"]:
                 payload = deepcopy(trunk_recorder_helper.source_template)
@@ -516,30 +554,15 @@ By AlertPage
                 payload["digitalRecorders"] = result["results"][radio_index]["channels"]
 
                 sources.append(payload)
-            
-            system = deepcopy(trunk_recorder_helper.system_template)
-            site_type = system_types[results["system"]["sType"]]
-            if site_type == "p25":
-                if site["modulation"] == "CPQSK":
-                    modulation = "qpsk"
-                else:
-                    modulation = "fsk4"
-            else:
-                modulation = "fsk4"
-
-            system["type"] = site_type
-            system["modulation"] = modulation
-            system["control_channels"].extend(site["control_channels"])
 
             config = deepcopy(trunk_recorder_helper.base)
-            config["systems"].append(system) 
+            config["systems"].append(systems) 
             config["sources"].extend(sources) 
-            
-            if OUTPUT_DIR:
-                filename = f"{OUTPUT_DIR}/{site['id']}.{SYSTEM}.config.json"            
-            else:
-                filename = f"{site['id']}.{SYSTEM}.config.json"
 
+            if OUTPUT_DIR:
+                filename = f"{OUTPUT_DIR}/{system['system_id']}.config.json"            
+            else:
+                filename = f"{system['system_id']}.config.json"
             if RANDOM_FILE_NAME:
                 filename = filename.strip('.json') + '.' + str(uuid.uuid4()) + '.json'
 
