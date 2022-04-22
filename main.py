@@ -1,14 +1,16 @@
 #!/usr/bin/python3
 
 import argparse
-from binascii import crc32
 import datetime
 import json
-import math
+import uuid
+import logging
 import decimal
 from copy import deepcopy
-import uuid
+
 from zeep import Client, helpers
+
+
 
 system_types = {
     1: "smartnet",
@@ -75,7 +77,7 @@ class RR:
             talkgroup_categories = json.loads(json.dumps(helpers.serialize_object(talkgroup_categories, dict), cls=DecimalEncoder))
 
         if add_metadata:
-            print("[+] Fetching Radio Reference data, this will take a hot sec... You can thank RR's sTuPiD API")
+            logging.warning("[+] Fetching Radio Reference data, this will take a hot sec... You can thank RR's sTuPiD API")
             talkgroups = []
             for talkgroup in json.loads(json.dumps(talkgroups_result, cls=DecimalEncoder)):
                 for cat in talkgroup_categories:
@@ -145,7 +147,7 @@ class tr_autotune:
         if not all_freq_covered:
             raise ValueError("Not all frequencies are covered!")
 
-        print(f"[+] Validated all {str(len(freq_list))} channels are covered")
+        logging.warning(f"[+] Validated all {str(len(freq_list))} channels are covered")
 
                 
     def calculate_center(self, lower_freq, upper_freq, system_freqs):
@@ -166,7 +168,7 @@ class tr_autotune:
     ########################################################################
 
 
-    def find_freqs(self, SYSTEM_FREQ_LIST, MAX_SDR_BANDWIDTH=3.2, SPECTRUM_BANDWIDTH=12.5, debug=False ):
+    def find_freqs(self, SYSTEM_FREQ_LIST, MAX_SDR_BANDWIDTH=3.2, SPECTRUM_BANDWIDTH=12.5):
         # sort our freqs low to high
         SYSTEM_FREQS = self.clean_frequencies(SYSTEM_FREQ_LIST)
 
@@ -194,22 +196,22 @@ class tr_autotune:
 
         # leftover_bandwith = (sdr_bandwidth * sdr_needed) - total_coverage_bandwidth
 
-        if debug:
-            # Print out info on decoding
-            print(f"[+] Highest frequency - {self.down_convert(upper_freq, self.multipliers.mhz)}")
-            print(f"[-] Upper Limit - {self.down_convert(upper_edge, self.multipliers.mhz)}")
-            print(f"[+] Lowest frequency - {self.down_convert(lower_freq, self.multipliers.mhz)}")
-            print(f"[-] Lower Limit - {self.down_convert(lower_edge, self.multipliers.mhz)}")
-            print(f"[+] Total bandwidth to cover - {self.down_convert(total_coverage_bandwidth, self.multipliers.mhz)}")
-            #print(f"[+] Total Leftover SDR bandwidth - {self.down_convert(leftover_bandwith, self.multipliers.mhz)}")
+        
+        # Print out info on decoding
+        logging.info(f"[+] Highest frequency - {self.down_convert(upper_freq, self.multipliers.mhz)}")
+        logging.info(f"[-] Upper Limit - {self.down_convert(upper_edge, self.multipliers.mhz)}")
+        logging.info(f"[+] Lowest frequency - {self.down_convert(lower_freq, self.multipliers.mhz)}")
+        logging.info(f"[-] Lower Limit - {self.down_convert(lower_edge, self.multipliers.mhz)}")
+        logging.info(f"[+] Total bandwidth to cover - {self.down_convert(total_coverage_bandwidth, self.multipliers.mhz)}")
+            #logging.warning(f"[+] Total Leftover SDR bandwidth - {self.down_convert(leftover_bandwith, self.multipliers.mhz)}")
     
         # if SDR_BANDWIDTH:
         radios = self.do_a_math(SYSTEM_FREQS, half_spectrum_bandwidth, lower_edge, self.up_convert(float(MAX_SDR_BANDWIDTH), self.multipliers.mhz))
-        if debug:
-            print(f"[+] Total Radios Needed - {str(len(radios))}")
+        
+        logging.info(f"[+] Total Radios Needed - {str(len(radios))}")
         return {"bandwidth": self.up_convert(MAX_SDR_BANDWIDTH, self.multipliers.mhz), "results": radios}
         # else:           
-        #     print("[+] Tring to find the right SDR bandwidth") 
+        #     logging.warning("[+] Tring to find the right SDR bandwidth") 
         #     results = []
         #     for sdr_bandwidth_option in SDR_BANDWIDTH_OPTIONS:
         #         radios = self.do_a_math(SYSTEM_FREQS, half_spectrum_bandwidth, lower_edge, self.up_convert(sdr_bandwidth_option, self.multipliers.mhz))
@@ -221,7 +223,7 @@ class tr_autotune:
         #     for result in sorted_results:
         #         if len(result["results"]) <= lowest_radio_count:
         #             if debug:
-        #                 print(f"[+] Found new best SDR Bandwidth - {self.up_convert(result['bandwidth'], self.multipliers.mhz)} - {len(result['results'])}") 
+        #                 logging.warning(f"[+] Found new best SDR Bandwidth - {self.up_convert(result['bandwidth'], self.multipliers.mhz)} - {len(result['results'])}") 
         #             lowest_radio_count = len(radios)
         #             final_result = result
         #     return final_result
@@ -298,7 +300,7 @@ class tr_autotune:
                 lower_freq = int(SYSTEM_FREQS[indexed_channels] - half_spectrum_bandwidth)
                 # Set to the max sdr reciveable bandwidth from the lower_freq
                 max_sdr_useable_freq = int((lower_freq + half_spectrum_bandwidth) + sdr_bandwidth)
-                #print(f"PREV: {lower_freq}  - NEXT: {max_sdr_useable_freq}")
+                #logging.warning(f"PREV: {lower_freq}  - NEXT: {max_sdr_useable_freq}")
             
         self.validate_coverage(radio_matrixes, SYSTEM_FREQS)
         return radio_matrixes
@@ -340,7 +342,47 @@ class trunk_recorder_helper:
         "frequencyFormat": "mhz"
         }
 
-def main():
+def fetchSystemData(SYSTEMS, DOWNLOAD_TALKGROUPS, RR_USER, RR_PASS, USE_RR_SITE_ID):
+
+    SYSTEM_RESULTS = []
+    TR = tr_autotune()
+
+    # Get Sites radio configs and list frequencies and channels
+    for SYSTEM in SYSTEMS:
+        System = RR(SYSTEM["system_id"], RR_USER, RR_PASS)
+        results = System.fetch_site_data(SYSTEM["sites"], use_rr_id=USE_RR_SITE_ID, add_metadata=DOWNLOAD_TALKGROUPS)
+
+        if DOWNLOAD_TALKGROUPS:
+            talkgroups = results["talkgroups"]
+            with open(f"{SYSTEM}.talkgroups.csv", 'w') as f:
+                f.write("Decimal,Hex,Alpha Tag,Mode,Description,Tag,Category\n")
+                for talkgroup in talkgroups:
+                    hex_dec = hex(int(talkgroup["tgDec"])).strip("0x")
+                    f.write(f'{talkgroup["tgDec"]},{hex_dec},{talkgroup["tgAlpha"]},{talkgroup["tgMode"].upper().replace("DE","E")},{talkgroup["tgDescr"]},{talkgroup["tag"]},{talkgroup["cat"]}\n')
+
+        sites = []
+        for site in results["sites"]:
+            freqs = [float(freq["freq"]) for freq in site["data"]["siteFreqs"]]
+            control_channels = []
+            for freq in site["data"]["siteFreqs"]:
+                if freq["use"]: control_channels.append(int(TR.up_convert(float(freq['freq']), TR.multipliers.mhz)))
+
+            payload = {
+                "id": site["data"]["siteNumber"],
+                "freqs": freqs,
+                "control_channels": control_channels,
+                "modulation": site["data"]["siteModulation"]
+                }
+            sites.append(payload)
+
+        SYSTEM_RESULTS.append({
+            "system_id": SYSTEM["system_id"],
+            "sites": sites,
+            "system_type": results["system"]["sType"]
+        })
+    return SYSTEM_RESULTS
+
+def startup():
     parser = argparse.ArgumentParser(description='Generate TR config with RR data')
     parser.add_argument('-r','--use_rr_site_id', help='Use RR site ID', action='store_true')
     parser.add_argument('-s','--system', nargs='+', help='List of Systems : site pairs "SystemID:siteID,siteID"', required=True)
@@ -353,12 +395,9 @@ def main():
     parser.add_argument('--sdr_fixed_sample_rate', help='Fix the sample rate of the SDRs in MHz')
     parser.add_argument('--spectrum_bandwidth', help='The badwith of the channels in Khz', default='12.5')    
     parser.add_argument('--print', help='Print config out', action='store_true')
-    parser.add_argument('-v','--print_radio_spacing', help='Print radio spacing config out', action='store_true')
+    parser.add_argument('-rs','--print_radio_spacing', help='Print radio spacing config out', action='store_true')
     parser.add_argument('--random_file_name', help='Append UUID to the filename', action='store_true')
-    parser.add_argument('--debug', help='Print debug info out', action='store_true')
-
-    args = parser.parse_args()
-
+    parser.add_argument('-l','--loglevel', help='Set log level debug, info, warning', default='warning')
 
     print(
         """
@@ -374,6 +413,19 @@ By AlertPage
                                             
         """
     )
+    return parser.parse_args()
+
+def main():
+    args = startup()
+
+    
+    if args.loglevel.lower() == "debug":
+        logging.basicConfig(level=logging.DEBUG)
+    elif args.loglevel.lower() == "info":
+        logging.basicConfig(level=logging.INFO)
+    else:
+        logging.basicConfig(level=logging.WARNING)
+    
 
     if args.sdr_max_sample_rate and args.sdr_fixed_sample_rate:
         raise ValueError("You can only use '--sdr_max_sample_rate' or '--sdr_fixed_sample_rate' ")
@@ -410,45 +462,18 @@ By AlertPage
     PRINT_DATA = args.print
     RANDOM_FILE_NAME = args.random_file_name
     MERGE_SITES = args.merge
-    DEBUG = args.debug
 
     TR = tr_autotune()
 
-    SYSTEM_RESULTS = []
+    SYSTEM_RESULTS = fetchSystemData(
+        SYSTEMS,
+        DOWNLOAD_TALKGROUPS,
+        RR_USER,
+        RR_PASS,
+        USE_RR_SITE_ID
+    )
 
-    # Get Sites radio configs and list frequencies and channels
-    for SYSTEM in SYSTEMS:
-        System = RR(SYSTEM["system_id"], RR_USER, RR_PASS)
-        results = System.fetch_site_data(SYSTEM["sites"], use_rr_id=USE_RR_SITE_ID, add_metadata=DOWNLOAD_TALKGROUPS)
-
-        if DOWNLOAD_TALKGROUPS:
-            talkgroups = results["talkgroups"]
-            with open(f"{SYSTEM}.talkgroups.csv", 'w') as f:
-                f.write("Decimal,Hex,Alpha Tag,Mode,Description,Tag,Category\n")
-                for talkgroup in talkgroups:
-                    hex_dec = hex(int(talkgroup["tgDec"])).strip("0x")
-                    f.write(f'{talkgroup["tgDec"]},{hex_dec},{talkgroup["tgAlpha"]},{talkgroup["tgMode"].upper().replace("DE","E")},{talkgroup["tgDescr"]},{talkgroup["tag"]},{talkgroup["cat"]}\n')
-
-        sites = []
-        for site in results["sites"]:
-            freqs = [float(freq["freq"]) for freq in site["data"]["siteFreqs"]]
-            control_channels = []
-            for freq in site["data"]["siteFreqs"]:
-                if freq["use"]: control_channels.append(int(TR.up_convert(float(freq['freq']), TR.multipliers.mhz)))
-
-            payload = {
-                "id": site["data"]["siteNumber"],
-                "freqs": freqs,
-                "control_channels": control_channels,
-                "modulation": site["data"]["siteModulation"]
-                }
-            sites.append(payload)
-
-        SYSTEM_RESULTS.append({
-            "system_id": SYSTEM["system_id"],
-            "sites": sites,
-            "system_type": results["system"]["sType"]
-        })
+    
 
     if MERGE_SITES:
         systems = []
@@ -456,6 +481,7 @@ By AlertPage
         for system in SYSTEM_RESULTS:          
             for site in system["sites"]:
                 system_json = deepcopy(trunk_recorder_helper.system_template)
+                
                 main_freq_list.extend(site["freqs"])
         
                 site_type = system_types[system["system_type"]]
@@ -472,9 +498,8 @@ By AlertPage
                 system_json["control_channels"].extend(site["control_channels"])
                 systems.append(system_json)
 
-        result = TR.find_freqs(main_freq_list, SAMPLE_RATE, SPECTRTUM_BANDWIDTH, debug=DEBUG)
-        if PRINT_RADIO_SPACING:
-            print(f'**********************************************************************\nSITE RADIO CONFIG\n**********************************************************************')
+        result = TR.find_freqs(main_freq_list, SAMPLE_RATE, SPECTRTUM_BANDWIDTH)
+        if PRINT_RADIO_SPACING:            
             print(json.dumps(result, indent=4))
 
         sources = []
@@ -506,10 +531,9 @@ By AlertPage
 
         with open(filename, 'w') as f:
             json.dump(config, f, indent=4)
-        print(f"[+] Wrote config - {filename}")
+        logging.warning(f"[+] Wrote config - {filename}")
 
         if PRINT_DATA:
-            print(f'**********************************************************************\n{filename}\n**********************************************************************')
             print(json.dumps(config, indent=4))
                 
         
@@ -520,8 +544,10 @@ By AlertPage
             
 
             for site in system["sites"]:
-                main_freq_list.extend(site["freqs"])
                 system_json = deepcopy(trunk_recorder_helper.system_template)
+                
+                main_freq_list.extend(site["freqs"])                
+                
                 site_type = system_types[system["system_type"]]
                 if site_type == "p25":
                     if site["modulation"] == "CPQSK":
@@ -536,9 +562,8 @@ By AlertPage
                 system_json["control_channels"].extend(site["control_channels"])
                 systems.append(system_json)
 
-            result = TR.find_freqs(main_freq_list, SAMPLE_RATE, SPECTRTUM_BANDWIDTH, debug=DEBUG)
+            result = TR.find_freqs(main_freq_list, SAMPLE_RATE, SPECTRTUM_BANDWIDTH)
             if PRINT_RADIO_SPACING:
-                print(f'**********************************************************************\nSITE RADIO CONFIG\n**********************************************************************')
                 print(json.dumps(result, indent=4))
 
             sources = []
@@ -568,12 +593,11 @@ By AlertPage
 
             with open(filename, 'w') as f:
                 json.dump(config, f, indent=4)
-            print(f"[+] Wrote config - {filename}")
+            logging.warning(f"[+] Wrote config - {filename}")
 
             if PRINT_DATA:
-                print(f'**********************************************************************\n{filename}\n**********************************************************************')
                 print(json.dumps(config, indent=4))
                 
-
+    logging.warning("[+] TR CONFIGURATOR HAS FINISHED")
 if __name__ == "__main__":
     main()
