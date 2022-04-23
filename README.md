@@ -5,9 +5,9 @@ Tunk-Recorder config auto generation with Radio Reference API
 
 ## Install
 ### requirements
-1. python 3.8
-2. Zeep
-3. Radio Reference creds
+1. [Python 3.8+](https://www.python.org/)
+2. [Zeep](https://github.com/mvantellingen/python-zeep)
+3. [Radio Reference creds](https://www.radioreference.com/)
 
 ```bash
 git clone https://github.com/AlertPageSDR/tr_configurator.git
