@@ -10,7 +10,7 @@ from copy import deepcopy
 
 from zeep import Client, helpers, exceptions
 
-VERSION = "0.2.0-dev"
+VERSION = "0.2.2-dev"
 
 system_types = {
     1: "smartnet",
