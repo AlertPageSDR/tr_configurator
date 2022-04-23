@@ -499,7 +499,7 @@ def main():
 
                 system_json["type"] = site_type
                 system_json["rrsysid"] = system["system_id"]            
-                system_json["rrsiteid"]["system_id"] = site["rr_site_id"]    
+                system_json["rrsiteid"]["system_id"] = str(site["rr_site_id"])   
                 system_json["modulation"] = modulation
                 system_json["control_channels"].extend(site["control_channels"])
                 systems.append(system_json)
@@ -565,7 +565,7 @@ def main():
 
                 system_json["type"] = site_type
                 system_json["rrsysid"] = system["system_id"]            
-                system_json["rrsiteid"] = site["rr_site_id"]                   
+                system_json["rrsiteid"] = str(site["rr_site_id"])
                 system_json["modulation"] = modulation
                 system_json["control_channels"].extend(site["control_channels"])
                 systems.append(system_json)
