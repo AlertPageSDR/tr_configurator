@@ -355,7 +355,7 @@ def fetchSystemData(SYSTEMS, DOWNLOAD_TALKGROUPS, RR_USER, RR_PASS, USE_RR_SITE_
 
         if DOWNLOAD_TALKGROUPS:
             talkgroups = results["talkgroups"]
-            with open(f"{SYSTEM['system_id']}.talkgroups.csv", 'w') as f:
+            with open(f"tr_trs_tg_{SYSTEM['system_id']}.csv", 'w') as f:
                 f.write("Decimal,Hex,Alpha Tag,Mode,Description,Tag,Category\n")
                 for talkgroup in talkgroups:
                     hex_dec = hex(int(talkgroup["tgDec"])).strip("0x")
@@ -370,6 +370,7 @@ def fetchSystemData(SYSTEMS, DOWNLOAD_TALKGROUPS, RR_USER, RR_PASS, USE_RR_SITE_
 
             payload = {
                 "id": site["data"]["siteNumber"],
+                "rr_site_id": site["rr_site_id"],
                 "freqs": freqs,
                 "control_channels": control_channels,
                 "modulation": site["data"]["siteModulation"]
@@ -497,6 +498,8 @@ def main():
                     modulation = "fsk4"
 
                 system_json["type"] = site_type
+                system_json["rrsysid"] = system["system_id"]            
+                system_json["rrsiteid"]["system_id"] = site["rr_site_id"]    
                 system_json["modulation"] = modulation
                 system_json["control_channels"].extend(site["control_channels"])
                 systems.append(system_json)
@@ -561,6 +564,8 @@ def main():
                     modulation = "fsk4"
 
                 system_json["type"] = site_type
+                system_json["rrsysid"] = system["system_id"]            
+                system_json["rrsiteid"] = site["rr_site_id"]                   
                 system_json["modulation"] = modulation
                 system_json["control_channels"].extend(site["control_channels"])
                 systems.append(system_json)
