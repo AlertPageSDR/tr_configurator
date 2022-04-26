@@ -55,9 +55,7 @@ class RR:
 
         # prompt user for system ID
         system = client.service.getTrsDetails(self.rr_system_id, my_auth_info)
-        sysName = system.sName
-        sysresult = system.sysid
-        sysid = sysresult[0].sysid
+
 
         system_json = helpers.serialize_object(system, dict)
 
@@ -387,7 +385,7 @@ def fetchSystemData(SYSTEMS, DOWNLOAD_TALKGROUPS, RR_USER, RR_PASS, USE_RR_SITE_
 def startup():
     parser = argparse.ArgumentParser(description='Generate TR config with RR data')
     parser.add_argument('-s','--system', nargs='+', help='List of Systems : site pairs "SystemID:siteID,siteID"', required=True)
-    parser.add_argument('-r','--use_rr_site_id', help='Use RR DB site ids', action='store_true')
+    parser.add_argument('-r','--use_rr_site_id', help='Use RR DB **site** ids', action='store_true')
     parser.add_argument('-u','--username', help='Radio Reference Username', required=True)
     parser.add_argument('-p','--password', help='Radio Reference Password', required=True)
     parser.add_argument('-o','--output_dir', help='The directory to place the configs', default='')
