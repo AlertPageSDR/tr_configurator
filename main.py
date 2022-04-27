@@ -75,7 +75,7 @@ class RR:
             talkgroup_categories = json.loads(json.dumps(helpers.serialize_object(talkgroup_categories, dict), cls=DecimalEncoder))
 
         if add_metadata:
-            logging.warning("[+] Fetching Radio Reference data, this will take a hot sec... You can thank RR's sTuPiD API")
+            logging.warning("[+] Fetching Radio Reference data, this will take a hot sec...")
             talkgroups = []
             for talkgroup in json.loads(json.dumps(talkgroups_result, cls=DecimalEncoder)):
                 for cat in talkgroup_categories:
