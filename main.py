@@ -10,7 +10,7 @@ from copy import deepcopy
 
 from zeep import Client, helpers, exceptions
 
-VERSION = "v0.2.1-beta"
+VERSION = "v0.2.2-beta"
 
 system_types = {
     1: "smartnet",
@@ -55,9 +55,7 @@ class RR:
 
         # prompt user for system ID
         system = client.service.getTrsDetails(self.rr_system_id, my_auth_info)
-        sysName = system.sName
-        sysresult = system.sysid
-        sysid = sysresult[0].sysid
+
 
         system_json = helpers.serialize_object(system, dict)
 
@@ -77,7 +75,7 @@ class RR:
             talkgroup_categories = json.loads(json.dumps(helpers.serialize_object(talkgroup_categories, dict), cls=DecimalEncoder))
 
         if add_metadata:
-            logging.warning("[+] Fetching Radio Reference data, this will take a hot sec... You can thank RR's sTuPiD API")
+            logging.warning("[+] Fetching Radio Reference data, this will take a hot sec, so go airfry a hot-pocket or some pizza rolls")
             talkgroups = []
             for talkgroup in json.loads(json.dumps(talkgroups_result, cls=DecimalEncoder)):
                 for cat in talkgroup_categories:
@@ -355,7 +353,7 @@ def fetchSystemData(SYSTEMS, DOWNLOAD_TALKGROUPS, RR_USER, RR_PASS, USE_RR_SITE_
 
         if DOWNLOAD_TALKGROUPS:
             talkgroups = results["talkgroups"]
-            with open(f"{SYSTEM['system_id']}.talkgroups.csv", 'w') as f:
+            with open(f"tr_trs_tg_{SYSTEM['system_id']}.csv", 'w') as f:
                 f.write("Decimal,Hex,Alpha Tag,Mode,Description,Tag,Category\n")
                 for talkgroup in talkgroups:
                     hex_dec = hex(int(talkgroup["tgDec"])).strip("0x")
@@ -370,6 +368,7 @@ def fetchSystemData(SYSTEMS, DOWNLOAD_TALKGROUPS, RR_USER, RR_PASS, USE_RR_SITE_
 
             payload = {
                 "id": site["data"]["siteNumber"],
+                "rr_site_id": site["rr_site_id"],
                 "freqs": freqs,
                 "control_channels": control_channels,
                 "modulation": site["data"]["siteModulation"]
@@ -386,7 +385,7 @@ def fetchSystemData(SYSTEMS, DOWNLOAD_TALKGROUPS, RR_USER, RR_PASS, USE_RR_SITE_
 def startup():
     parser = argparse.ArgumentParser(description='Generate TR config with RR data')
     parser.add_argument('-s','--system', nargs='+', help='List of Systems : site pairs "SystemID:siteID,siteID"', required=True)
-    parser.add_argument('-r','--use_rr_site_id', help='Use RR DB site ids', action='store_true')
+    parser.add_argument('-r','--use_rr_site_id', help='Use RR DB **site** ids', action='store_true')
     parser.add_argument('-u','--username', help='Radio Reference Username', required=True)
     parser.add_argument('-p','--password', help='Radio Reference Password', required=True)
     parser.add_argument('-o','--output_dir', help='The directory to place the configs', default='')
@@ -497,6 +496,8 @@ def main():
                     modulation = "fsk4"
 
                 system_json["type"] = site_type
+                system_json["rrsysid"] = system["system_id"]            
+                system_json["rrsiteid"]= str(site["rr_site_id"])   
                 system_json["modulation"] = modulation
                 system_json["control_channels"].extend(site["control_channels"])
                 systems.append(system_json)
@@ -561,6 +562,8 @@ def main():
                     modulation = "fsk4"
 
                 system_json["type"] = site_type
+                system_json["rrsysid"] = system["system_id"]            
+                system_json["rrsiteid"] = str(site["rr_site_id"])
                 system_json["modulation"] = modulation
                 system_json["control_channels"].extend(site["control_channels"])
                 systems.append(system_json)

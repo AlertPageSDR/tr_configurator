@@ -5,9 +5,9 @@ Tunk-Recorder config auto generation with Radio Reference API
 
 ## Install
 ### requirements
-1. python 3.8
-2. Zeep
-3. Radio Reference creds
+1. [Python 3.8+](https://www.python.org/)
+2. [Zeep](https://github.com/mvantellingen/python-zeep)
+3. [Radio Reference creds](https://www.radioreference.com/)
 
 ```bash
 git clone https://github.com/AlertPageSDR/tr_configurator.git
@@ -54,23 +54,23 @@ optional arguments:
 ## Example
 
 
-#### Merge multiple sites to single config
+#### Merge multiple systems to single config
 ```bash
-./main.py --system 6699 -s 33559 17501 -u user -p password  -r  --merge
+./main.py --system 6699:33559,17501 1234:12345 -u user -p password -r --merge
 ```
 
 #### Download talkgroups too
 ```bash
-./main.py --system 6699 -s 33559 17501 -u user -p password  -r  --talkgroups
+./main.py --system 6699:33559 -u user -p password -r --talkgroups
 ```
 
 
 #### Varible capped sample rate
 ```bash
-./main.py --system 6699 -s 33559 17501 -u user -p password  -r   --sdr_max_sample_rate 2.048 
+./main.py --system 6699:33559,17501 1234:12345 -u user -p password -r --sdr_max_sample_rate 2.048 
 ```
 
 #### Fixed sample rate
 ```bash
-./main.py --system 6699 -s 33559 17501 -u user -p password  -r  --sdr_fixed_sample_rate 2.048 
+./main.py --system 6699:33559,17501 -u user -p password -r --sdr_fixed_sample_rate 2.048 
 ```
