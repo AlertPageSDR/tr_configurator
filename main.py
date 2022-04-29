@@ -488,10 +488,11 @@ def main():
         
                 site_type = system_types[system["system_type"]]
                 if site_type == "p25":
-                    if site["modulation"] == "CPQSK":
-                        modulation = "qpsk"
-                    else:
+                    modulation = "qpsk"
+                    if not site["modulation"] == "CPQSK":
                         modulation = "fsk4"
+                    else:
+                        modulation = "qpsk"
                 else:
                     modulation = "fsk4"
 
@@ -554,10 +555,11 @@ def main():
                 
                 site_type = system_types[system["system_type"]]
                 if site_type == "p25":
-                    if site["modulation"] == "CPQSK":
-                        modulation = "qpsk"
-                    else:
+                    modulation = "qpsk"
+                    if not site["modulation"] == "CPQSK":
                         modulation = "fsk4"
+                    else:
+                        modulation = "qpsk"
                 else:
                     modulation = "fsk4"
 
