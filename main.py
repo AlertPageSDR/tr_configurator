@@ -10,7 +10,7 @@ from copy import deepcopy
 
 from zeep import Client, helpers, exceptions
 
-VERSION = "v0.2.2-dev"
+VERSION = "v0.2.3-dev"
 
 system_types = {
     1: "smartnet",
@@ -166,7 +166,7 @@ class tr_autotune:
     ########################################################################
 
 
-    def find_freqs(self, SYSTEM_FREQ_LIST, MAX_SDR_BANDWIDTH=3.2, SPECTRUM_BANDWIDTH=12.5):
+    def find_freqs(self, SYSTEM_FREQ_LIST, MAX_SDR_BANDWIDTH=3.2, SPECTRUM_BANDWIDTH=12.5, max_channels=None):
         # sort our freqs low to high
         SYSTEM_FREQS = self.clean_frequencies(SYSTEM_FREQ_LIST)
 
@@ -204,7 +204,7 @@ class tr_autotune:
             #logging.warning(f"[+] Total Leftover SDR bandwidth - {self.down_convert(leftover_bandwith, self.multipliers.mhz)}")
     
         # if SDR_BANDWIDTH:
-        radios = self.do_a_math(SYSTEM_FREQS, half_spectrum_bandwidth, lower_edge, self.up_convert(float(MAX_SDR_BANDWIDTH), self.multipliers.mhz))
+        radios = self.do_a_math(SYSTEM_FREQS, half_spectrum_bandwidth, lower_edge, self.up_convert(float(MAX_SDR_BANDWIDTH), self.multipliers.mhz), max_channels)
         
         logging.info(f"[+] Total Radios Needed - {str(len(radios))}")
         return {"bandwidth": self.up_convert(MAX_SDR_BANDWIDTH, self.multipliers.mhz), "results": radios}
@@ -228,7 +228,7 @@ class tr_autotune:
 
 
 
-    def do_a_math(self, SYSTEM_FREQS, half_spectrum_bandwidth, lower_edge, sdr_bandwidth):
+    def do_a_math(self, SYSTEM_FREQS, half_spectrum_bandwidth, lower_edge, sdr_bandwidth, max_channels=None):
         
         radio_high_freq, indexed_channels, radio_index = 0, 0, 1
         # System Channel count minux one for zero index
@@ -263,7 +263,11 @@ class tr_autotune:
 
                     # Increment our tracker counts for radio channels / Channels accounted for
                     sdr_channel_count += 1
-                    indexed_channels += 1            
+                    indexed_channels += 1     
+
+                if max_channels:
+                    if sdr_channel_count == max_channels:
+                        break
 
             # Set high and low and center and channel counts values for each radio
             radio_matrixes[radio_index]["high"] = radio_high_freq
@@ -397,6 +401,7 @@ def startup():
     parser.add_argument('-sm','--sdr_max_sample_rate', help='The max sample rate of the SDRs in MHz')
     parser.add_argument('-sf','--sdr_fixed_sample_rate', help='Fix the sample rate of the SDRs in MHz')
     parser.add_argument('-sb','--spectrum_bandwidth', help='The badwith of the channels in Khz', default='12.5')    
+    parser.add_argument('-rm','--sdr_max_channels', help='The Maximum # of channels per radio')    
     parser.add_argument('-rs','--print_radio_spacing', help='Print radio spacing config out', action='store_true')
     parser.add_argument('-rf','--random_file_name', help='Append UUID to the filename', action='store_true')
     
@@ -445,6 +450,7 @@ def main():
     PRINT_DATA = args.print
     RANDOM_FILE_NAME = args.random_file_name
     MERGE_SITES = args.merge
+    SDR_MAX_CHANNELS = int(args.sdr_max_channels)
 
     SAMPLE_RATE = 3.2
     FIXED_SAMPLE_RATE = None
@@ -503,7 +509,7 @@ def main():
                 system_json["control_channels"].extend(site["control_channels"])
                 systems.append(system_json)
 
-        result = TR.find_freqs(main_freq_list, SAMPLE_RATE, SPECTRTUM_BANDWIDTH)
+        result = TR.find_freqs(main_freq_list, SAMPLE_RATE, SPECTRTUM_BANDWIDTH, SDR_MAX_CHANNELS)
         if PRINT_RADIO_SPACING:            
             print(json.dumps(result, indent=4))
 
@@ -570,7 +576,7 @@ def main():
                 system_json["control_channels"].extend(site["control_channels"])
                 systems.append(system_json)
 
-            result = TR.find_freqs(main_freq_list, SAMPLE_RATE, SPECTRTUM_BANDWIDTH)
+            result = TR.find_freqs(main_freq_list, SAMPLE_RATE, SPECTRTUM_BANDWIDTH, SDR_MAX_CHANNELS)
             if PRINT_RADIO_SPACING:
                 print(json.dumps(result, indent=4))
 
