@@ -1,5 +1,5 @@
 # Trunk-Recorder Configurator
-Tunk-Recorder config auto generation with Radio Reference API
+Trunk-Recorder config auto generation with Radio Reference API
 
 **THIS PROGAM IS STILL IS PROGRESS, PLEASE HELP REPORT BUGS. PLEASE NOTE THAT UNTIL THERE IS A STABLE RELEASE THE CLI OPTIONS MAY CHANGE**
 
