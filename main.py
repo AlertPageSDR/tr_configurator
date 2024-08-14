@@ -334,7 +334,7 @@ class trunk_recorder_helper:
         ],
         "systems": [           
         ],
-        "captureDir": "",
+        "captureDir": "captures",
         "logLevel": "info",
         "broadcastSignals": True,
         "frequencyFormat": "mhz",
